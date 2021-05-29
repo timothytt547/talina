@@ -16,7 +16,7 @@ def similar(a, b):
 from dotenv import load_dotenv
 load_dotenv()
 
-bot = Bot(".")
+bot = Bot("$")
 
 # f1 cmd idea:
 # $f1 - no arguments - shows information about upcoming race
@@ -123,11 +123,12 @@ async def f1(ctx, *args):
 
 @bot.command()
 async def fn(ctx, *args):
-    """Fake Nitro
+    """Mongcoust Nuked Emotes and Animated Emotes "tool"
     """
     # nme_guild_id = 847466330440859648
     # # could expand to use args to fetch any server (bot is in) in the future
     # nme = await bot.fetch_guild(nme_guild_id)
+    wl_servers = ["Mongcoust", "mong nuked emotes"]
     if len(args) == 0:
         await ctx.send("Input an emote name to search for.")
     else:
@@ -135,6 +136,8 @@ async def fn(ctx, *args):
         max_e = ""
         async for guild in bot.fetch_guilds():
             g = await bot.fetch_guild(guild.id)
+            if g.name not in wl_servers:
+                continue
             # print(g.emojis, g.name)
             for e in g.emojis:
                 s = similar(e.name.lower(), args[0].lower())
@@ -154,5 +157,43 @@ async def fn(ctx, *args):
     # for b in bot.emojis:
     #     print(str(b))
     # await ctx.send()
+
+@bot.command()
+async def fnlist(ctx):
+    wl_servers = ["Mongcoust", "mong nuked emotes"]
+    count = 0
+    page = 0
+
+    embeds = []
+    embeds.append(discord.Embed(title="Emotes List", color=discord.Color.red()))
+
+    async for guild in bot.fetch_guilds():
+        g = await bot.fetch_guild(guild.id)
+        # print(g.name)
+        if g.name not in wl_servers:
+            # print("skipped "+g.name)
+            continue
+        for e in g.emojis:
+            if count > 2000:
+                count = 0
+                page+=1
+                embeds.append(discord.Embed(title="", color=discord.Color.red()))
+            if g.name == "Mongcoust":
+                if not e.animated:
+                    continue
+            count += len(str(e))+len(e.name)
+            embeds[page].add_field(name=str(e), value=e.name + ", " + g.name, inline=False)
+
+    # print(page, len(embeds))
+    for e in embeds:
+        await ctx.author.send(embed=e)
+
+@bot.command()
+async def ping(ctx):
+    """Shows bot latency to the server"""
+    pong = await ctx.send("Pong!")
+    delay = (pong.created_at - ctx.message.created_at).total_seconds() * 1000
+    await pong.edit(content = f"Pong! `{int(delay)}ms`")
+    print(f"Ping: {int(delay)}ms \t {ctx.message.author} \t {ctx.message.guild}")
 
 bot.run(os.environ['TOKEN'])
