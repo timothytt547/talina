@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timezone
 from ics import Calendar
 import dateutil.parser
+import time
 
 from difflib import SequenceMatcher
 def similar(a, b):
@@ -112,81 +113,153 @@ async def f1(ctx, *args):
     """Shows upcoming F1 event dates
 
     Usage:
-        !f1 - Shows immediate upcoming session
-        !f1 [session type] - Shows relevant sessions only
+        $f1 - Shows immediate upcoming session
+        $f1 [session type] - Shows relevant sessions only
             (types accepted: fp, practice, q, quali, gp, race, all)
-        !f1 [session type] [number] - Shows requested amount of upcoming events (max 10)
-        !f1 [number] - Shows the next immediate x number of sessions (max 10)
+        $f1 [session type] [number] - Shows requested amount of upcoming events (max 10)
+        $f1 [number] - Shows the next immediate x number of sessions (max 10)
     """
     embed = get_f1(args)
     await ctx.send(embed=embed)
 
+# whitelisted servers for emotes to be used on
+# blacklisted servers where emotes aren't read (e.g. my dev servers)
+bl_servers = ["ohhh"]
+
+async def nuke_messages(msgs, *args):
+    if len(args) > 1:
+        time.sleep(args[0])
+    for m in msgs:
+        await m.delete()
+
 @bot.command()
 async def fn(ctx, *args):
-    """Mongcoust Nuked Emotes and Animated Emotes "tool"
+    """Fake Nitro tool
     """
     # nme_guild_id = 847466330440859648
     # # could expand to use args to fetch any server (bot is in) in the future
     # nme = await bot.fetch_guild(nme_guild_id)
-    wl_servers = ["Mongcoust", "mong nuked emotes"]
+    # wl_servers = ["Mongcoust", "mong nuked emotes"]
+    # print(ctx.message)
+
+    msgs = [ctx.message]
+
     if len(args) == 0:
-        await ctx.send("Input an emote name to search for.")
+        msgs.append(await ctx.send("Input an emote name to search for."))
     else:
         max_similar = 0
         max_e = ""
         async for guild in bot.fetch_guilds():
             g = await bot.fetch_guild(guild.id)
-            if g.name not in wl_servers:
+            if g.name in bl_servers:
                 continue
             # print(g.emojis, g.name)
             for e in g.emojis:
+                if g.name == ctx.message.guild.name:
+                    if not e.animated:
+                        continue
                 s = similar(e.name.lower(), args[0].lower())
                 if s > max_similar:
                     max_e = e
                     max_similar = s
 
         if max_similar == 0:
-            await ctx.send("No emotes found with that name. Try another term.")
+            msgs.append(await ctx.send("Something f'd up, ping timo"))
         elif max_similar < 1:
+            await ctx.send((ctx.author.nick if ctx.author.nick else str(ctx.author)[:len(str(ctx.author))-5])+":")
             await ctx.send(str(max_e))
-            await ctx.send("||`:"+max_e.name+":`||")
+            # await ctx.send("||`:"+max_e.name+":`||")
         else:
+            await ctx.send(str(ctx.author.nick)+":")
             await ctx.send(str(max_e))
+
+    await nuke_messages(msgs, 1)
+    # time.sleep(3)
+    # await ctx.message.delete()
+    # await bot_msg.delete()
 
     # print(nme.emojis)
     # for b in bot.emojis:
     #     print(str(b))
     # await ctx.send()
 
-@bot.command()
-async def fnlist(ctx):
-    wl_servers = ["Mongcoust", "mong nuked emotes"]
-    count = 0
-    page = 0
+def ret_e_name(e):
+    return str(e.name)
 
-    embeds = []
-    embeds.append(discord.Embed(title="Emotes List", color=discord.Color.red()))
+@bot.command()
+async def fnlist(ctx, *args):
+    """DM's you a list of available emotes
+    By default sends the max amount of emotes per message, which condenses the amount of messages but loses large emote viewing. To preview with larger emotes, use "$fnlist large".
+    """
+    e_send_count = 100
+    if len(args) != 0:
+        if args[0] == "large":
+            e_send_count = 27
+
+    char_count = 0
 
     async for guild in bot.fetch_guilds():
         g = await bot.fetch_guild(guild.id)
         # print(g.name)
-        if g.name not in wl_servers:
+        if g.name in bl_servers or not g.emojis:
             # print("skipped "+g.name)
             continue
-        for e in g.emojis:
-            if count > 2000:
-                count = 0
-                page+=1
-                embeds.append(discord.Embed(title="", color=discord.Color.red()))
-            if g.name == "Mongcoust":
-                if not e.animated:
-                    continue
-            count += len(str(e))+len(e.name)
-            embeds[page].add_field(name=str(e), value=e.name + ", " + g.name, inline=False)
 
-    # print(page, len(embeds))
-    for e in embeds:
-        await ctx.author.send(embed=e)
+        page = 0
+        emote_count = 0
+
+        # embeds = []
+        # embeds.append(discord.Embed(title=g.name, color=discord.Color.red()))
+        e_string = ""
+        # send 16 emotes per field?
+        # if over 16 emotes, next field
+        # if over 2000 characters, send and start new embed
+        await ctx.author.send(embed=discord.Embed(title=g.name, color=discord.Color.red()))
+        for e in sorted(g.emojis, key=ret_e_name):
+            e_string = e_string + str(e)
+            emote_count+=1
+            char_count += len(str(e))
+            if emote_count >= e_send_count or char_count > 1900:
+                await ctx.author.send(e_string)
+                emote_count = 0
+                char_count = 0
+                e_string = ""
+            # if char_count > 2000:
+            #     char_count = 0
+            #     page+=1
+            #     embeds.append(discord.Embed(title=g.name + ", Page " + str(page+1), color=discord.Color.red()))
+            # char_count += len(str(e))+len(e.name)
+            # embeds[page].add_field(name=str(e), value=e.name + ", " + g.name, inline=False)
+
+        if emote_count != 0:
+            await ctx.author.send(e_string)
+        # for e in embeds:
+        #     await ctx.author.send(embed=e)
+    await ctx.author.send("End of list")
+
+@bot.command()
+async def bigsmoke(ctx):
+    g = await bot.fetch_guild(511874763531223040)
+    smoke = []
+    e_string = ""
+    emote_count = 0
+    e_send_count = 24
+
+    for e in g.emojis:
+        if "twonumber9s" in e.name:
+            smoke.append(e)
+    for e in sorted(smoke, key=ret_e_name):
+        e_string = e_string + str(e)
+        emote_count+=1
+        if emote_count % 8 == 0:
+            e_string += "\n"
+        if emote_count >= e_send_count:
+            await ctx.send(e_string)
+            emote_count = 0
+            e_string = ""
+
+    if emote_count != 0:
+        await ctx.send(e_string)
 
 @bot.command()
 async def ping(ctx):
@@ -195,5 +268,10 @@ async def ping(ctx):
     delay = (pong.created_at - ctx.message.created_at).total_seconds() * 1000
     await pong.edit(content = f"Pong! `{int(delay)}ms`")
     print(f"Ping: {int(delay)}ms \t {ctx.message.author} \t {ctx.message.guild}")
+
+@bot.command()
+async def link(ctx):
+    """Shows the link to add the bot to your own server"""
+    await ctx.send("`https://discord.com/api/oauth2/authorize?client_id=722507276572950671&permissions=2148001856&scope=bot`")
 
 bot.run(os.environ['TOKEN'])
