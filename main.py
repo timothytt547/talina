@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from ics import Calendar
 import dateutil.parser
 import time
+from re import search
 
 from difflib import SequenceMatcher
 def similar(a, b):
@@ -127,8 +128,8 @@ async def f1(ctx, *args):
 bl_servers = ["ohhh"]
 
 async def nuke_messages(msgs, *args):
-    if len(args) > 1:
-        time.sleep(args[0])
+    if len(args) > 0:
+        time.sleep(int(args[0]))
     for m in msgs:
         await m.delete()
 
@@ -146,7 +147,10 @@ async def fn(ctx, *args):
 
     if len(args) == 0:
         msgs.append(await ctx.send("Input an emote name to search for."))
+    elif len(args[0]) < 3:
+        msgs.append(await ctx.send("Search term must be longer than 2 letters."))
     else:
+        atta = False
         max_similar = 0
         max_e = ""
         async for guild in bot.fetch_guilds():
@@ -155,25 +159,35 @@ async def fn(ctx, *args):
                 continue
             # print(g.emojis, g.name)
             for e in g.emojis:
-                if g.name == ctx.message.guild.name:
-                    if not e.animated:
-                        continue
-                s = similar(e.name.lower(), args[0].lower())
-                if s > max_similar:
-                    max_e = e
-                    max_similar = s
+                # print(args[0].lower() + " " + e.name.lower())
+                if search(args[0].lower(), e.name.lower()):
+                    atta = True
+                    await ctx.send((ctx.author.nick if ctx.author.nick else str(ctx.author)[:len(str(ctx.author))-5])+":")
+                    await ctx.send(str(e))
+                    break
 
-        if max_similar == 0:
-            msgs.append(await ctx.send("Something f'd up, ping timo"))
-        elif max_similar < 1:
-            await ctx.send((ctx.author.nick if ctx.author.nick else str(ctx.author)[:len(str(ctx.author))-5])+":")
-            await ctx.send(str(max_e))
-            # await ctx.send("||`:"+max_e.name+":`||")
-        else:
-            await ctx.send(str(ctx.author.nick)+":")
-            await ctx.send(str(max_e))
+        if not atta:
+            msgs.append(await ctx.send("No similar matching emotes found, try harder or use $fnlist for a full list."))
+        #     for e in g.emojis:
+        #         if g.name == ctx.message.guild.name:
+        #             if not e.animated:
+        #                 continue
+        #         s = similar(e.name.lower(), args[0].lower())
+        #         if s > max_similar:
+        #             max_e = e
+        #             max_similar = s
+        #
+        # if max_similar == 0:
+        #     msgs.append(await ctx.send("Something f'd up, ping timo"))
+        # elif max_similar < 0.5:
+        #     # m = await ctx.send("No similar matching emotes found, try harder or use $fnlist for a full list.")
+        #     msgs.append(await ctx.send("No similar matching emotes found, try harder or use $fnlist for a full list."))
+        #     # await ctx.send("||`:"+max_e.name+":`||")
+        # else:
+        #     await ctx.send((ctx.author.nick if ctx.author.nick else str(ctx.author)[:len(str(ctx.author))-5])+":")
+            # await ctx.send(str(max_e))
 
-    await nuke_messages(msgs, 1)
+    await nuke_messages(msgs, 3)
     # time.sleep(3)
     # await ctx.message.delete()
     # await bot_msg.delete()
@@ -238,12 +252,19 @@ async def fnlist(ctx, *args):
     await ctx.author.send("End of list")
 
 @bot.command()
-async def bigsmoke(ctx):
+async def bigsmoke(ctx, *args):
+    """Sends the Big Smoke cutscene
+        Use '$bigsmoke small' to send a smaller sized version.
+    """
     g = await bot.fetch_guild(511874763531223040)
     smoke = []
     e_string = ""
     emote_count = 0
     e_send_count = 24
+
+    if len(args) != 0:
+        if args[0] == "small":
+            e_send_count = 32
 
     for e in g.emojis:
         if "twonumber9s" in e.name:
