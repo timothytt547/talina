@@ -16,7 +16,6 @@ from ics import Calendar
 import dateutil.parser
 import time
 from re import search
-# from multipledispatch import dispatch
 
 # load token
 from dotenv import load_dotenv
@@ -24,7 +23,6 @@ load_dotenv()
 
 # init bot stuff
 bot = Bot("$")
-# client = discord.Client(intents=discord.Intents.all())
 slash = SlashCommand(bot, sync_commands=True)
 
 @bot.event
@@ -198,6 +196,8 @@ async def fn(ctx, name:str):
                     # await ctx.send((ctx.author.nick if ctx.author.nick else str(ctx.author)[:len(str(ctx.author))-5])+":")
                     await ctx.send(str(e))
                     break
+            if atta:
+                break
 
         if not atta:
             msgs.append(await ctx.send("No similar matching emotes found, try harder or use /fnlist for a full list."))
