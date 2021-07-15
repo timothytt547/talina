@@ -60,7 +60,7 @@ class FakeNitro(commands.Cog):
                 # print(g.emojis, g.name)
                 for e in g.emojis:
                     # print(args[0].lower() + " " + e.name.lower())
-                    if search(name.lower(), e.name.lower()):
+                    if search(name.strip().lower(), e.name.lower()):
                         found = True
                         if large:
                             m = await ctx.send("https://cdn.discordapp.com/emojis/"+str(e.id)+".png")
@@ -78,7 +78,6 @@ class FakeNitro(commands.Cog):
 
     @cog_ext.cog_slash(name="de", description="Deletes the previous emote you sent with the bot")
     async def de(self, ctx):
-        # print("Author: " + str(ctx.author.id) + ", Message: " + str(m.id))
         if str(ctx.author.id) in invo_msgs:
             m = invo_msgs[str(ctx.author.id)]
             if m:
@@ -93,10 +92,6 @@ class FakeNitro(commands.Cog):
 
     @cog_ext.cog_slash(name="fnlist", description="DM's you a list of available emotes")
     async def fnlist(self, ctx):
-        # """DM's you a list of available emotes
-        # By default sends the max amount of emotes per message, which condenses the amount of messages but loses large emote viewing. To preview with larger emotes, use "$fnlist large".
-        # """
-
         await ctx.send("Sending...", delete_after=.001)
         e_send_count = 100
         char_count = 0

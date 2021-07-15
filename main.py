@@ -26,6 +26,10 @@ slash = SlashCommand(bot, sync_commands=True)
 async def on_ready():
     print("Ready!")
 
+@bot.event
+async def on_slash_command(ctx):
+    print(ctx.author.name + ": " + ctx.name)
+
 # sorry cow
 for cog in os.listdir("./cogs"):
     if cog.endswith(".py") and not cog.startswith("_"):

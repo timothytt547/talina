@@ -8,6 +8,9 @@ from discord.ext.commands import Bot
 from discord_slash import SlashCommand, SlashContext
 from discord_slash import cog_ext
 
+def ret_e_name(e):
+    return str(e.name)
+
 class Misc(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -15,9 +18,6 @@ class Misc(commands.Cog):
     @cog_ext.cog_slash(name="bigsmoke",
                 description="Sends the Big Smoke cutscene")
     async def bigsmoke(self, ctx, small:bool=True):
-        # """Sends the Big Smoke cutscene
-        #     Use '$bigsmoke small' to send a smaller sized version.
-        # """
         g = await self.bot.fetch_guild(511874763531223040)
         smoke = []
         e_string = ""
