@@ -63,7 +63,10 @@ class FakeNitro(commands.Cog):
                     if search(name.strip().lower(), e.name.lower()):
                         found = True
                         if large:
-                            m = await ctx.send("https://cdn.discordapp.com/emojis/"+str(e.id)+".png")
+                            ext = ".png"
+                            if e.animated:
+                                ext = ".gif"
+                            m = await ctx.send("https://cdn.discordapp.com/emojis/"+str(e.id)+ext)
                         else:
                             m = await ctx.send(str(e))
                         invo_msgs[str(ctx.author.id)] = m
