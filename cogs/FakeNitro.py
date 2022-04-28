@@ -15,6 +15,7 @@ from discord_slash.utils.manage_commands import create_option, create_choice
 
 import time
 from re import search
+from random import randint
 
 # blacklisted servers where emotes aren't read (e.g. my dev servers)
 # bl_servers = ["ohhh"]
@@ -53,28 +54,40 @@ class FakeNitro(commands.Cog):
             await ctx.send("Search term must be longer than 2 letters.", delete_after=3)
         else:
             found = False
+            matched = []
             async for guild in self.bot.fetch_guilds():
                 g = await self.bot.fetch_guild(guild.id)
                 if g.name in bl_servers:
                     continue
                 # print(g.emojis, g.name)
                 for e in g.emojis:
-                    # print(args[0].lower() + " " + e.name.lower())
+                    # print(name.strip().lower() + " " + e.name.lower())
                     if search(name.strip().lower(), e.name.lower()):
-                        found = True
-                        if large:
-                            ext = ".png"
-                            if e.animated:
-                                ext = ".gif"
-                            m = await ctx.send("https://cdn.discordapp.com/emojis/"+str(e.id)+ext)
-                        else:
-                            m = await ctx.send(str(e))
-                        invo_msgs[str(ctx.author.id)] = m
-                        break
-                if found:
-                    break
+                        # print(e.guild_id, ctx.guild.id)
+                        # if the command is invoked from a server, AND the matched emote is from that server, AND it isn't animated
+                        # meaning that you don't need nitro to use the emote anyway so skip it
+                        if ctx.guild is not None and e.guild_id == ctx.guild.id and not e.animated:
+                            continue
+                        print("appended")
+                        matched.append(e)
 
-            if not found:
+                #         found = True
+                #
+                # if found:
+                #     break
+            # if matched at least one emote
+            # print(len(matched))
+            if len(matched) > 0:
+                e = matched[randint(0,len(matched)-1)]
+                if large:
+                    ext = ".png"
+                    if e.animated:
+                        ext = ".gif"
+                    m = await ctx.send("https://cdn.discordapp.com/emojis/"+str(e.id)+ext)
+                else:
+                    m = await ctx.send(str(e))
+                invo_msgs[str(ctx.author.id)] = m
+            else:
                 # msgs.append(await ctx.send("No similar matching emotes found, try harder or use /fnlist for a full list.", delete_after=3))
                 await ctx.send("No similar matching emotes found, try harder or use /fnlist for a full list.", delete_after=3)
 
@@ -113,7 +126,7 @@ class FakeNitro(commands.Cog):
             # send 16 emotes per field?
             # if over 16 emotes, next field
             # if over 2000 characters, send and start new embed
-            await ctx.author.send(embed=discord.Embed(title=g.name, color=discord.Color.red()))
+            # await ctx.author.send(embed=discord.Embed(title=g.name, color=discord.Color.red()))
             for e in sorted(g.emojis, key=ret_e_name):
                 e_string = e_string + str(e)
                 emote_count+=1

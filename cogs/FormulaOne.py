@@ -14,10 +14,14 @@ import dateutil.parser
 
 
 def get_f1(session_type, *args):
+    # set emojis for f1 embed display
     emoji_fp = ":man_in_motorized_wheelchair:"
     emoji_quali = ":stopwatch:"
     emoji_gp = "<a:PepegaDriving:847480054379970601>"
+    emoji_sp = ":man_running::skin-tone-5:"
 
+    # if there is no additional arguments, only display the immediate next event
+    # else use user input
     if len(args) == 0:
         list_max = 1
     else:
@@ -33,28 +37,34 @@ def get_f1(session_type, *args):
     elif session_type == "q":
         type_pretty = "Quali"
         emoji = emoji_quali
-        c = Calendar(requests.get("https://f1calendar.com/download/f1-calendar_q.ics").text)
+        c = Calendar(requests.get("https://f1calendar.com/download/f1-calendar_qualifying.ics").text)
     elif session_type == "gp":
         type_pretty = "GP"
-        # emoji = "<:YEP:847466518483959857>"
         emoji = emoji_gp
         c = Calendar(requests.get("https://f1calendar.com/download/f1-calendar_gp.ics").text)
+    elif session_type == "sp":
+        type_pretty = "Sprint"
+        emoji = emoji_sp
+        c = Calendar(requests.get("https://f1calendar.com/download/f1-calendar_gp.ics").text)
     elif session_type == "all":
-        c = Calendar(requests.get("https://f1calendar.com/download/f1-calendar_p1_p2_p3_q_gp.ics").text)
+        c = Calendar(requests.get("https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics").text)
     else:
-        c = Calendar(requests.get("https://f1calendar.com/download/f1-calendar_p1_p2_p3_q_gp.ics").text)
+        c = Calendar(requests.get("https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics").text)
 
     if list_max > 1:
         embed=discord.Embed(title="Next "+ str(list_max) + " F1 " + type_pretty + "s " + emoji, color=discord.Color.red())
     else:
         embed=discord.Embed(title="Next F1 " + type_pretty + " " + emoji, color=discord.Color.red())
 
+    # make a list of events
+    # if there is an event happening now, add it first
+    # add all events after now
     now = datetime.now(timezone.utc)
     events = []
     if list(c.timeline.now()):
-        # print("now")
         events = events + list(c.timeline.now())
     events = events + list(c.timeline.start_after(now))
+
     count = 0
 
     for e in events:
@@ -99,25 +109,29 @@ class FormulaOne(commands.Cog):
                  options=[
                     create_option(
                         name="type",
-                        description="Practice, Qualifying, Race/GP",
+                        description="Practice, Qualifying, Race/GP, Sprint",
                         option_type=3,
-                        required=True,
+                        required=False,
                         choices=[
-                        create_choice(
-                            name="Free Practice",
-                            value="fp"
+                            create_choice(
+                                name="Grand Prix",
+                                value="gp"
                             ),
-                        create_choice(
-                            name="Qualifying",
-                            value="q"
+                            create_choice(
+                                name="Qualifying",
+                                value="q"
                             ),
-                        create_choice(
-                            name="Grand Prix",
-                            value="gp"
+                            create_choice(
+                                name="Free Practice",
+                                value="fp"
                             ),
-                        create_choice(
-                            name="All",
-                            value="all"
+                            create_choice(
+                                name="Sprint",
+                                value="sp"
+                            ),
+                            create_choice(
+                                name="All",
+                                value="all"
                             )
                         ]
                     ),
@@ -129,7 +143,7 @@ class FormulaOne(commands.Cog):
                     )
                 ]
             )
-    async def f1(self, ctx, type:str, max:int=1):
+    async def f1(self, ctx, type:str="all", max:int=1):
         embed = get_f1(type, max)
         await ctx.send(embed=embed)
 

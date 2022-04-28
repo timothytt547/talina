@@ -13,6 +13,7 @@ from discord_slash.model import SlashCommandPermissionType
 import os
 import requests
 import json
+from datetime import datetime, timezone
 
 # load token
 from dotenv import load_dotenv
