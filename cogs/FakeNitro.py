@@ -53,7 +53,6 @@ class FakeNitro(commands.Cog):
         if len(name) < 3:
             await ctx.send("Search term must be longer than 2 letters.", delete_after=3)
         else:
-            found = False
             matched = []
             async for guild in self.bot.fetch_guilds():
                 g = await self.bot.fetch_guild(guild.id)
@@ -63,20 +62,13 @@ class FakeNitro(commands.Cog):
                 for e in g.emojis:
                     # print(name.strip().lower() + " " + e.name.lower())
                     if search(name.strip().lower(), e.name.lower()):
-                        # print(e.guild_id, ctx.guild.id)
                         # if the command is invoked from a server, AND the matched emote is from that server, AND it isn't animated
                         # meaning that you don't need nitro to use the emote anyway so skip it
                         if ctx.guild is not None and e.guild_id == ctx.guild.id and not e.animated:
                             continue
                         print("appended")
                         matched.append(e)
-
-                #         found = True
-                #
-                # if found:
-                #     break
             # if matched at least one emote
-            # print(len(matched))
             if len(matched) > 0:
                 e = matched[randint(0,len(matched)-1)]
                 if large:
@@ -90,7 +82,6 @@ class FakeNitro(commands.Cog):
             else:
                 # msgs.append(await ctx.send("No similar matching emotes found, try harder or use /fnlist for a full list.", delete_after=3))
                 await ctx.send("No similar matching emotes found, try harder or use /fnlist for a full list.", delete_after=3)
-
 
     @cog_ext.cog_slash(name="de", description="Deletes the previous emote you sent with the bot")
     async def de(self, ctx):
