@@ -24,6 +24,10 @@ def get_f1(session_type, *args):
     # else use user input
     if len(args) == 0:
         list_max = 1
+    elif args[0] > 10:
+        list_max = 10
+    elif args[0] < 0:
+        list_max = 1
     else:
         list_max = args[0]
 
@@ -45,7 +49,7 @@ def get_f1(session_type, *args):
     elif session_type == "sp":
         type_pretty = "Sprint"
         emoji = emoji_sp
-        c = Calendar(requests.get("https://f1calendar.com/download/f1-calendar_gp.ics").text)
+        c = Calendar(requests.get("https://files-f1.motorsportcalendars.com/f1-calendar_sprint.ics").text)
     elif session_type == "all":
         c = Calendar(requests.get("https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics").text)
     else:
@@ -71,6 +75,8 @@ def get_f1(session_type, *args):
         if count >= list_max:
             break
 
+        # print(e)
+
         s = str(e).split("\n")
         # type = s[2].split(":")[1]
 
@@ -79,6 +85,8 @@ def get_f1(session_type, *args):
             summary = emoji_fp + " " + summary
         elif "Qualify" in summary:
             summary = emoji_quali + " " + summary
+        elif "Sprint" in summary:
+            summary = emoji_sp + " " + summary
         elif "Grand Prix" in summary:
             summary = emoji_gp + " " + summary
 
@@ -89,13 +97,18 @@ def get_f1(session_type, *args):
         d = dateutil.parser.isoparse(start_time[:len(start_time)-1])
         diff = d - now
 
+        #print(d)
+
         # if timedelta is negative, assume the event is happening now
         if diff < timedelta(0):
-            embed.add_field(name=summary, value="Happening now", inline=False)
+            embed.add_field(name=summary, value="Live now, started <t:"+str(d.timestamp())[:-2]+":R>", inline=False)
+        # if more than 7 days, display date using instead of actual time
+        elif diff > timedelta(days = 3):
+            embed.add_field(name=summary, value="Starting <t:"+str(d.timestamp())[:-2]+":F>", inline=False)
         else:
             out = str(diff).split(".")[0].split(":")
-            embed.add_field(name=summary, value="In "+out[0]+" hours and "+out[1]+" minutes", inline=False)
-
+            # embed.add_field(name=summary, value="In "+out[0]+" hours and "+out[1]+" minutes, at <t:"+str(d.timestamp())[:-2]+":t>", inline=False)
+            embed.add_field(name=summary, value="<t:"+str(d.timestamp())[:-2]+":R>, at <t:"+str(d.timestamp())[:-2]+":t>", inline=False)
         count+=1
 
     return embed
