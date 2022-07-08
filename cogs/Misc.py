@@ -17,15 +17,12 @@ class Misc(commands.Cog):
 
     @cog_ext.cog_slash(name="bigsmoke",
                 description="Sends the Big Smoke cutscene")
-    async def bigsmoke(self, ctx, small:bool=True):
+    async def bigsmoke(self, ctx):
         g = await self.bot.fetch_guild(511874763531223040)
         smoke = []
         e_string = ""
         emote_count = 0
         e_send_count = 24
-
-        if small:
-            e_send_count = 32
 
         for e in g.emojis:
             if "twonumber9s" in e.name:
@@ -35,10 +32,10 @@ class Misc(commands.Cog):
             emote_count+=1
             if emote_count % 8 == 0:
                 e_string += "\n"
-            if emote_count >= e_send_count:
-                await ctx.send(e_string)
-                emote_count = 0
-                e_string = ""
+            # if emote_count >= e_send_count:
+            #     await ctx.send(e_string)
+            #     emote_count = 0
+            #     e_string = ""
 
         if emote_count != 0:
             await ctx.send(e_string)

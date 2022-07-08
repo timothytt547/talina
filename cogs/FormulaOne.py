@@ -18,7 +18,7 @@ def get_f1(session_type, *args):
     emoji_fp = ":man_in_motorized_wheelchair:"
     emoji_quali = ":stopwatch:"
     emoji_gp = "<a:PepegaDriving:847480054379970601>"
-    emoji_sp = ":man_running::skin-tone-5:"
+    emoji_sp = ":man_running_tone5:"
 
     # if there is no additional arguments, only display the immediate next event
     # else use user input
