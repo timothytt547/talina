@@ -3,3 +3,7 @@
 *.pyc
 Profile
 requirements - Copy.txt
+emojis - Copy.json
+NadekoBot.db
+NadekoBot.db-shm
+NadekoBot.db-wal

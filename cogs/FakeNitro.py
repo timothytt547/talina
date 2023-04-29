@@ -1,21 +1,24 @@
-# base stuff
-import requests
+# # base stuff
+# import requests
+#
+# # discord libraries
+# import discord
+# from discord import Guild
+# from collections import deque
+#
+# from discord.ext import commands
+#
+# from discord_slash import SlashCommand, SlashContext
+# from discord_slash import cog_ext
+# from discord_slash.cog_ext import cog_component
+# from discord_slash.utils.manage_commands import create_option, create_choice
 
-# discord libraries
-import discord
-from discord import Guild
-from collections import deque
-
-from discord.ext import commands
-
-from discord_slash import SlashCommand, SlashContext
-from discord_slash import cog_ext
-from discord_slash.cog_ext import cog_component
-from discord_slash.utils.manage_commands import create_option, create_choice
+import interactions
 
 import time
 from re import search
 from random import randint
+import json
 
 # blacklisted servers where emotes aren't read (e.g. my dev servers)
 # bl_servers = ["ohhh"]
@@ -29,33 +32,78 @@ def ret_e_name(e):
 # value = the command message (from the bot) from that user (id only?)
 invo_msgs = {}
 
-class FakeNitro(commands.Cog):
-    def __init__(self, bot):
-        self.bot = bot
+class FakeNitro(interactions.Extension):
+    def __init__(self, client):
+        self.client: interactions.Client = client
 
-    @cog_ext.cog_slash(name="fn",
+    @interactions.extension_command(name="concat",
+                 description="Concatenate a message with fake nitro emotes.",
+                 options=[
+                    interactions.Option(
+                        name="names",
+                        description="Usage: Type in emote names separated by comma. ~ for new line. e.g. eblangled,blank,~,eblangledL.",
+                        type=interactions.OptionType.STRING,
+                        required=True
+                    )
+
+                ])
+    async def concat(self, ctx, names:str):
+        names_spl = names.split(",")
+        send = ""
+        not_found = False
+
+        emotes_json = json.load(open('emojis.json'))
+        emojis = emotes_json["emojis"]
+        shortnames = [i["shortname"] for i in emojis]
+        # print(shortnames)
+        for name in names_spl:
+            if name == "~":
+                send = send + "\n"
+            else:
+                matched = False
+                if ":" + name + ":" in shortnames:
+                    send = send + ":"+name+":"
+                    continue
+                for g in self.client.guilds:
+                    for e in g.emojis:
+                        if e.name.lower() == name.strip().lower():
+                            send = send + str(e)
+                            matched = True
+
+                if not matched:
+                    send = send + "`"+name+"` "
+                    not_found = True
+        # at the end, Send
+        if not_found:
+            await ctx.send("One or more of your inputs were not found. Please check the spelling, this command searches exact and complete names, not partial (e.g. for `eblangled`, 'eblan' will not match). The emotes not found are shown below in text. You can use /fnlist to see a list of all emotes. \n"+send,ephemeral=True)
+        else:
+            m = await ctx.send(send)
+            invo_msgs[str(ctx.author.id)] = m
+
+    @interactions.extension_command(name="fn",
                  description="Fake Nitro tool",
                  options=[
-                    create_option(
+                    interactions.Option(
                         name="name",
                         description="Emote name to search for",
-                        option_type=3,
+                        type=interactions.OptionType.STRING,
                         required=True
                     ),
-                    create_option(
+                    interactions.Option(
                         name="large",
                         description="Larger version of the emote?",
-                        option_type=5,
+                        type=interactions.OptionType.STRING,
                         required=False
                     )
                 ])
     async def fn(self, ctx, name:str, large:bool=False):
         if len(name) < 3:
-            await ctx.send("Search term must be longer than 2 letters.", delete_after=3)
+            await ctx.send("Search term must be longer than 2 letters.", ephemeral=True)
         else:
             matched = []
-            async for guild in self.bot.fetch_guilds():
-                g = await self.bot.fetch_guild(guild.id)
+            # print(type([0]))
+            # self.client.http.get_self_guilds()
+            for g in self.client.guilds:
                 if g.name in bl_servers:
                     continue
                 # print(g.emojis, g.name)
@@ -64,9 +112,9 @@ class FakeNitro(commands.Cog):
                     if search(name.strip().lower(), e.name.lower()):
                         # if the command is invoked from a server, AND the matched emote is from that server, AND it isn't animated
                         # meaning that you don't need nitro to use the emote anyway so skip it
-                        if ctx.guild is not None and e.guild_id == ctx.guild.id and not e.animated:
+                        if ctx.guild is not None and g.id == ctx.guild.id and not e.animated:
                             continue
-                        print("appended")
+                        # print("appended")
                         matched.append(e)
             # if matched at least one emote
             if len(matched) > 0:
@@ -81,30 +129,29 @@ class FakeNitro(commands.Cog):
                 invo_msgs[str(ctx.author.id)] = m
             else:
                 # msgs.append(await ctx.send("No similar matching emotes found, try harder or use /fnlist for a full list.", delete_after=3))
-                await ctx.send("No similar matching emotes found, try harder or use /fnlist for a full list.", delete_after=3)
+                await ctx.send("No similar matching emotes found, try harder or use /fnlist for a full list.", ephemeral=True)
 
-    @cog_ext.cog_slash(name="de", description="Deletes the previous emote you sent with the bot")
+    @interactions.extension_command(name="de", description="Deletes the previous emote you sent with the bot")
     async def de(self, ctx):
         if str(ctx.author.id) in invo_msgs:
             m = invo_msgs[str(ctx.author.id)]
             if m:
                 invo_msgs[str(ctx.author.id)] = None
                 await m.delete()
-                await ctx.send("Deleted.",delete_after=.001)
+                await ctx.send("Deleted.",ephemeral=True)
             else:
-                await ctx.send("Can only delete immediate previous emote.", delete_after=3)
+                await ctx.send("Can only delete immediate previous emote.", ephemeral=True)
         else:
-            await ctx.send("No previous /fn usage recorded from you.", delete_after=3)
+            await ctx.send("No previous /fn usage recorded from you.", ephemeral=True)
 
 
-    @cog_ext.cog_slash(name="fnlist", description="DM's you a list of available emotes")
+    @interactions.extension_command(name="fnlist", description="Sends you a list of available emotes")
     async def fnlist(self, ctx):
-        await ctx.send("Sending...", delete_after=.001)
+        await ctx.send("Sending...", ephemeral=True)
         e_send_count = 100
         char_count = 0
 
-        async for guild in self.bot.fetch_guilds():
-            g = await self.bot.fetch_guild(guild.id)
+        for g in self.client.guilds:
             # print(g.name)
             if g.name in bl_servers or not g.emojis:
                 # print("skipped "+g.name)
@@ -117,22 +164,22 @@ class FakeNitro(commands.Cog):
             # send 16 emotes per field?
             # if over 16 emotes, next field
             # if over 2000 characters, send and start new embed
-            # await ctx.author.send(embed=discord.Embed(title=g.name, color=discord.Color.red()))
+            await ctx.send(embeds=interactions.Embed(title=g.name, color=interactions.Color.red()), ephemeral=True)
             for e in sorted(g.emojis, key=ret_e_name):
                 e_string = e_string + str(e)
                 emote_count+=1
                 char_count += len(str(e))
                 if emote_count >= e_send_count or char_count > 1900:
-                    await ctx.author.send(e_string)
+                    await ctx.send(e_string, ephemeral=True)
                     emote_count = 0
                     char_count = 0
                     e_string = ""
 
             if emote_count != 0:
-                await ctx.author.send(e_string)
+                await ctx.send(e_string, ephemeral=True)
 
-        await ctx.author.send("End of list")
+        await ctx.send("End of list", ephemeral=True)
 
 
 def setup(bot):
-    bot.add_cog(FakeNitro(bot))
+    FakeNitro(bot)

@@ -1,21 +1,14 @@
-# discord libraries
-import discord
-from discord import Guild
-
-from discord.ext import commands
-from discord.ext.commands import Bot
-
-from discord_slash import SlashCommand, SlashContext
-from discord_slash import cog_ext
+# discord stuff
+import interactions
 
 def ret_e_name(e):
     return str(e.name)
 
-class Misc(commands.Cog):
+class Misc(interactions.Extension):
     def __init__(self, bot):
         self.bot = bot
 
-    @cog_ext.cog_slash(name="bigsmoke",
+    @interactions.extension_command(name="bigsmoke",
                 description="Sends the Big Smoke cutscene")
     async def bigsmoke(self, ctx):
         g = await self.bot.fetch_guild(511874763531223040)
@@ -41,4 +34,4 @@ class Misc(commands.Cog):
             await ctx.send(e_string)
 
 def setup(bot):
-    bot.add_cog(Misc(bot))
+    Misc(bot)
