@@ -1,7 +1,6 @@
-discord-py-interactions==4.3.4
-requests==2.22.0
-ics==0.7
-discord==1.7.3
-python-dotenv==0.18.0
-python_dateutil==2.8.1
-table2ascii
+discord_py_interactions==5.11.0
+ics==0.7.2
+python-dotenv==1.0.0
+python_dateutil==2.8.2
+Requests==2.31.0
+table2ascii==1.1.3

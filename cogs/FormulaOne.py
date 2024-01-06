@@ -1,13 +1,7 @@
 # base stuff
 import requests
-
-# # discord stuff
-# import discord
-# from discord.ext import commands
-# from discord_slash import cog_ext
-# from discord_slash.utils.manage_commands import create_option, create_choice
-
 import interactions
+from interactions import Client, Extension, slash_command, SlashCommandOption, SlashCommandChoice, OptionType, SlashContext
 
 # f1 cmd stuff
 from datetime import datetime, timezone, timedelta
@@ -19,6 +13,9 @@ from re import search
 
 table_style = PresetStyle.thin_double_rounded
 first_col_heading = True
+
+# Mong ID 395243617956003842
+scopes = [395243617956003842]
 
 
 # helper function to add lines on top of table
@@ -79,9 +76,9 @@ def get_f1_schedule(session_type, *args):
         c = Calendar(requests.get("https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics").text)
 
     if list_max > 1:
-        embed=interactions.Embed(title="Next "+ str(list_max) + " F1 " + type_pretty + "s " + emoji, color=interactions.Color.red())
+        embed=interactions.Embed(title="Next "+ str(list_max) + " F1 " + type_pretty + "s " + emoji, color=interactions.Color.random())
     else:
-        embed=interactions.Embed(title="Next F1 " + type_pretty + " " + emoji, color=interactions.Color.red())
+        embed=interactions.Embed(title="Next F1 " + type_pretty + " " + emoji, color=interactions.Color.random())
 
     # make a list of events
     # if there is an event happening now, add it first
@@ -94,15 +91,13 @@ def get_f1_schedule(session_type, *args):
 
     count = 0
 
+    # for each event, get the summary of the event and display the time
     for e in events:
         if count >= list_max:
             break
 
-        # print(str(e))
-        # print("###")
-
-        s = str(e).split("\n")
-        # type = s[2].split(":")[1]
+        # s = str(e).split("\n")
+        s = e.serialize().split("\n")
 
         summary = s[9].split(":")[2]
         if "FP1" in summary or "FP2" in summary or "FP3" in summary:
@@ -119,13 +114,10 @@ def get_f1_schedule(session_type, *args):
         start_time = s[7].split(":")[1]
         end_time = s[4].split(":")[1]
 
-        # print(s)
-
+        # convert string time to datetime objects
         d = dateutil.parser.isoparse(start_time[:len(start_time)-1])
         e = dateutil.parser.isoparse(end_time[:len(end_time)-1])
         diff = d - now
-
-        #print(d)
 
         # if timedelta is negative, assume the event is happening now
         if diff < timedelta(0):
@@ -135,7 +127,6 @@ def get_f1_schedule(session_type, *args):
             embed.add_field(name=summary, value="Starting <t:"+str(d.timestamp())[:-2]+":F>", inline=False)
         else:
             out = str(diff).split(".")[0].split(":")
-            # embed.add_field(name=summary, value="In "+out[0]+" hours and "+out[1]+" minutes, at <t:"+str(d.timestamp())[:-2]+":t>", inline=False)
             embed.add_field(name=summary, value="<t:"+str(d.timestamp())[:-2]+":R>, at <t:"+str(d.timestamp())[:-2]+":t>", inline=False)
 
         count+=1
@@ -262,7 +253,7 @@ async def get_f1_results(ctx, name, max, full):
         elif len(matched) == 1:
             circuit_id = matched[0][1]
 
-    # print(circuit_id)
+    print(circuit_id)
     if circuit_id != "last":
         response = requests.get("https://ergast.com/api/f1/current/circuits/"+circuit_id+"/results.json")
     else:
@@ -324,142 +315,167 @@ async def get_f1_results(ctx, name, max, full):
     output = race_name_insert + round_num_insert + output
     # print(repr(output))
     return output
+    
+async def get_f1_circuits():
+    response = requests.get("https://ergast.com/api/f1/current/circuits.json")
+    r = response.json()
+    circuits_json = r["MRData"]["CircuitTable"]["Circuits"]
+    
+    body = ""
+    for c in circuits_json:
+        body = body + (c["circuitName"] + " (" + c["Location"]["locality"]+ ", " + c["Location"]["country"]+")\n")
 
-class FormulaOne(interactions.Extension):
-    def __init__(self, bot):
-        self.bot = bot
+    
+    return body
 
-    @interactions.extension_command(name="f1",
-                 description="Shows F1 information",
-                 options=[
-                     interactions.Option(
-                        name="schedule",
-                        description="Show the upcoming F1 races",
-                        type=interactions.OptionType.SUB_COMMAND,
-                        options=[
-                            interactions.Option(
-                                name="type",
-                                description="Practice, Qualifying, Race/GP, Sprint",
-                                type=interactions.OptionType.STRING,
-                                required=False,
-                                choices=[
-                                    interactions.Choice(
-                                        name="Grand Prix",
-                                        value="gp"
-                                    ),
-                                    interactions.Choice(
-                                        name="Qualifying",
-                                        value="q"
-                                    ),
-                                    interactions.Choice(
-                                        name="Free Practice",
-                                        value="fp"
-                                    ),
-                                    interactions.Choice(
-                                        name="Sprint",
-                                        value="sp"
-                                    ),
-                                    interactions.Choice(
-                                        name="All",
-                                        value="all"
-                                    )
-                                ]
-                            ),
-                            interactions.Option(
-                                name="max",
-                                description="Sessions shown, up to a maximum of 10",
-                                type=interactions.OptionType.INTEGER,
-                                required=False
-                            )
-                        ]
-                     ),
-                     interactions.Option(
-                        name="standings",
-                        description="Show the current season's standings",
-                        type=interactions.OptionType.SUB_COMMAND,
-                        options=[
-                            interactions.Option(
-                                name="type",
-                                description="Driver/Constructor",
-                                type=interactions.OptionType.STRING,
-                                required=True,
-                                choices=[
-                                    interactions.Choice(
-                                        name="Driver",
-                                        value="driver"
-                                    ),
-                                    interactions.Choice(
-                                        name="Constructor",
-                                        value="constructor"
-                                    )
-                                ]
-                            ),
-                            interactions.Option(
-                                name="max",
-                                description="Rankings shown, defaults to 5",
-                                type=interactions.OptionType.INTEGER,
-                                required=False
-                            )
-                        ]
+class FormulaOne(Extension):
+    def __init__(self, client):
+        self.client: Client = client
+
+    @slash_command(name="f1",
+        description="Shows F1 information",
+        scopes=scopes,
+        sub_cmd_name="schedule",
+        sub_cmd_description="Show the upcoming F1 races",
+        options=[
+            SlashCommandOption(
+                name="type",
+                description="Practice, Qualifying, Race/GP, Sprint",
+                type=OptionType.STRING,
+                required=False,
+                choices=[
+                    SlashCommandChoice(
+                        name="Grand Prix",
+                        value="gp"
                     ),
-                    # results: user can search for a track name or leave blank for latest
-                    interactions.Option(
-                        name="results",
-                        description="Show the current season's race results",
-                        type=interactions.OptionType.SUB_COMMAND,
-                        options=[
-                            interactions.Option(
-                                name="name",
-                                description="Track name to search for, leave as empty for latest race",
-                                type=interactions.OptionType.STRING,
-                                required=False
-                            ),
-                            interactions.Option(
-                                name="max",
-                                description="Places shown, defaults to 5",
-                                type=interactions.OptionType.INTEGER,
-                                required=False
-                            ),
-                            interactions.Option(
-                                name="full",
-                                description="Show additional info (points and status), will break table on mobile",
-                                type=interactions.OptionType.BOOLEAN,
-                                required=False
-                            )
-                        ]
+                    SlashCommandChoice(
+                        name="Qualifying",
+                        value="q"
+                    ),
+                    SlashCommandChoice(
+                        name="Free Practice",
+                        value="fp"
+                    ),
+                    SlashCommandChoice(
+                        name="Sprint",
+                        value="sp"
+                    ),
+                    SlashCommandChoice(
+                        name="All",
+                        value="all"
                     )
                 ]
+            ),
+            SlashCommandOption(
+                name="max",
+                description="Sessions shown, up to a maximum of 10",
+                type=OptionType.INTEGER,
+                required=False
             )
-    async def f1(self, ctx, sub_command: str, type:str="", name:str="", max:int=0, full:bool=False):
-        if sub_command == "schedule":
-            # if input is either no input or invalid input, set default for subcommand
-            if max == 0:
-                max = 1
-            if type == "":
-                type = "all"
-            embed = get_f1_schedule(type, max)
-            await ctx.send(embeds=embed)
-        elif sub_command == "standings":
-            # if input is either no input or invalid input, set default for subcommand
-            if max == 0:
-                max = 5
+        ]
+    )
+    async def f1_schedule(self, ctx: SlashContext, type:str="", max:int=0):
+        # if input is either no input or invalid input, set default for subcommand
+        if max == 0:
+            max = 1
+        if type == "":
+            type = "all"
+        embed = get_f1_schedule(type, max)
+        await ctx.send(embeds=embed)
 
-            output = get_f1_standings(type, max)
-            # embed = interactions.Embed(
-            #     color=interactions.Color.red(),
-            #     fields=[interactions.EmbedField(name=type.capitalize()+" Standings",value="```\n"+output+"\n```")],
-            #     footer=interactions.EmbedFooter(text="Data from ergast.com"),
-            #     )
-            # await ctx.send(embeds=embed)
-            await ctx.send("```\n"+output+"\n```")
-        elif sub_command == "results":
-            # if input is either no input or invalid input, set default for subcommand
-            if max == 0:
-                max = 5
 
-            output = await get_f1_results(ctx, name, max, full)
-            if output:
+    @slash_command(name="f1",
+        description="Shows F1 information",
+        scopes=scopes,
+        sub_cmd_name="standings",
+        sub_cmd_description="Show the current season's standings",
+        options=[
+            SlashCommandOption(
+                name="type",
+                description="Driver/Constructor",
+                type=OptionType.STRING,
+                required=True,
+                choices=[
+                    SlashCommandChoice(
+                        name="Driver",
+                        value="driver"
+                    ),
+                    SlashCommandChoice(
+                        name="Constructor",
+                        value="constructor"
+                    )
+                ]
+            ),
+            SlashCommandOption(
+                name="max",
+                description="Rankings shown, defaults to 5",
+                type=OptionType.INTEGER,
+                required=False
+            )
+        ]
+    )
+    async def f1_standings(self, ctx: SlashContext,type:str="", max:int=0):
+        # buy time
+        await ctx.defer()
+
+        # if input is either no input or invalid input, set default for subcommand
+        if max == 0:
+            max = 5
+
+        output = get_f1_standings(type, max)
+
+        await ctx.send("```\n"+output+"\n```")
+
+    @slash_command(name="f1",
+        description="Shows F1 information",
+        scopes=scopes,
+        sub_cmd_name="results",
+        sub_cmd_description="Show this season's race results (use /f1 circuits for circuit names)",
+        options=[
+            SlashCommandOption(
+                name="name",
+                description="Track name to search for, leave as empty for latest race",
+                type=OptionType.STRING,
+                required=False
+            ),
+            SlashCommandOption(
+                name="max",
+                description="Places shown, defaults to 5",
+                type=OptionType.INTEGER,
+                required=False
+            ),
+            SlashCommandOption(
+                name="full",
+                description="Show additional info (points and status), will break table on mobile",
+                type=OptionType.BOOLEAN,
+                required=False
+            )
+        ]
+    )
+    async def f1_results(self, ctx: SlashContext, type:str="", name:str="", max:int=0, full:bool=False):
+        # buy time
+        await ctx.defer()
+
+        # if input is either no input or invalid input, set default for subcommand
+        if max == 0:
+            max = 5
+
+        output = await get_f1_results(ctx, name, max, full)
+        print(len(output))
+        if output:
+            try:
                 await ctx.send("```\n"+output+"\n```")
+            except interactions.errors.LibraryException:
+                await ctx.send("Table too long to send, please reduce the number of lines", ephemeral=True)
 
-def setup(bot):
-    FormulaOne(bot)
+    @slash_command(name="f1",
+        description="Shows F1 information",
+        scopes=scopes,
+        sub_cmd_name="circuits",
+        sub_cmd_description="Show the current season's race circuits",
+        options=[],
+    )
+    async def f1_circuits(self, ctx: SlashContext):
+        output = await get_f1_circuits()
+        # print(len(output))
+        await ctx.send("```\n"+output+"\n```", ephemeral=True)
