@@ -2,7 +2,12 @@
 A Discord bot written in Python, able to use Slash commands.
 
 Main functions include:
-- /f1 (Shows next F1 event times)
+- /f1
+  
+   - schedule - for showing upcoming races.
+   - results - for viewing results of a certain race
+   - circuits - for viewing this season's circuits
+   - standings - for viewing this season's standings
 - /fn (Poor man's Nitro)
 - And some minor ones, you can view them in the code.
 
