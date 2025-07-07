@@ -20,45 +20,10 @@ bot = Client(intents=Intents.DEFAULT | Intents.MESSAGE_CONTENT)
 async def on_ready():
     print("Ready!")
 
-@listen()
-async def on_slash_command(ctx):
+
+@interactions.listen()
+async def on_command(self, ctx: interactions.SlashContext):
     print(ctx.author.name + ": " + ctx.name)
-
-@listen()
-async def on_message_create(event: MessageCreate):
-    # Teisoku ID 888627926755577907
-    # ohhh ID 447789315926261760
-    monitor_guild = 447789315926261760
-    monitor_channel = 449986886212255744
-    if event.message.guild.id == monitor_guild:
-        # Test channel ID 890583644782071818
-        # Teisoku #general ID 888627927388942400
-
-        msg = await bot.http.get_channel_messages(monitor_channel, limit=4)
-
-        # print(msg[0]["author"]["id"])
-        # print(msg[1]["author"]["id"])
-        # print(msg[2]["author"]["id"])
-        # print(msg[3]["author"]["id"])
-        msg_time = dateutil.parser.isoparse(msg[1]["timestamp"])
-        difference = datetime.now(timezone.utc) - msg_time
-
-        # if the most recently sent of the 4 messages (3 previous messages) are all by the same author
-        # meaning author tried to send a 4th message in a row in short succession
-        # also check if second most recent message was over a day ago
-        # if not over a day ago, delete most recent message
-        recent_author = msg[0]["author"]["id"]
-
-        if all(recent_author == m["author"]["id"] for m in msg):
-            # print("YES")
-            if difference < timedelta(days = 1):
-                # print("delete")
-                chn = await bot.fetch_channel(monitor_channel)
-                del_msg = await chn.fetch_message(event.message.id)
-                del_msg_content = del_msg.content
-                await del_msg.delete()
-                usr_obj = await bot.fetch_user(recent_author)
-                await usr_obj.send("Your message was deleted. Your message's content was: \n" + del_msg_content)
 
 # sorry cow
 for cog in os.listdir("./cogs"):

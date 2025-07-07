@@ -136,7 +136,7 @@ class FakeNitro(Extension):
                     m = await ctx.send("https://cdn.discordapp.com/emojis/"+str(e.id)+ext)
                 else:
                     m = await ctx.send(str(e))
-                print(ctx.author.id)
+                # print(ctx.author.id)
                 invo_msgs[str(ctx.author.id)] = m
             else:
                 # msgs.append(await ctx.send("No similar matching emotes found, try harder or use /fnlist for a full list.", delete_after=3))

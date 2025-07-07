@@ -9,3 +9,5 @@ NadekoBot.db-shm
 NadekoBot.db-wal
 dead/
 talina prod env
+scheduled_reminders.json
+cogs/FormulaOne.pyZZ
