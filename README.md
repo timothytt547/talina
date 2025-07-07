@@ -5,9 +5,8 @@ Main functions include:
 - /f1
   
    - schedule - for showing upcoming races.
-   - results - for viewing results of a certain race
-   - circuits - for viewing this season's circuits
-   - standings - for viewing this season's standings
+   - upcoming_reminders - List pending F1 reminders
+   - clear_reminders - Wipes all pending reminders
 - /fn (Poor man's Nitro)
 - And some minor ones, you can view them in the code.
 
