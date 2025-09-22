@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import requests
+import time
 
 from datetime import datetime, timezone, timedelta
 from ics import Calendar
@@ -28,6 +29,8 @@ def get_f1_schedule(session_type, *args):
     emoji_gp    = ":race_car:"
     emoji_sp    = ":man_running_tone5:"
     now = datetime.now(timezone.utc)
+    offline = False
+    cal = None
 
     # choose calendar URL
     urls = {
@@ -35,10 +38,45 @@ def get_f1_schedule(session_type, *args):
         "q":   "https://files-f1.motorsportcalendars.com/f1-calendar_qualifying.ics",
         "gp":  "https://files-f1.motorsportcalendars.com/f1-calendar_gp.ics",
         "sp":  "https://files-f1.motorsportcalendars.com/f1-calendar_sprint.ics",
-        "all": "https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics",
+        "all": "https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
     }
     url = urls.get(session_type, urls["all"])
-    cal = Calendar(requests.get(url).text)
+
+    for _ in range(10):
+        try:
+            cal = Calendar(requests.get(url).text)
+            break
+        except Exception as e:
+            print(_, e)
+            time.sleep(0.05)
+
+    if not cal:
+        # if no work, assume calendar is down
+        local_ics_file_path = "/home/timlau_cy/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
+        # print(e)
+        try:
+            with open(local_ics_file_path, 'r', encoding='utf-8') as f:
+                cal_content = f.read()
+            cal = Calendar(cal_content)
+            offline = True
+        except FileNotFoundError:
+            print(f"Local ICS file not found: {local_ics_file_path}. Everything is fucked, the end.")
+            return
+
+    # try:
+    #     cal = Calendar(requests.get(url).text)
+    # except Exception as e:
+    #     # if no work, assume calendar is down
+    #     local_ics_file_path = "/home/timlau_cy/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
+    #     print(e)
+    #     try:
+    #         with open(local_ics_file_path, 'r', encoding='utf-8') as f:
+    #             cal_content = f.read()
+    #         cal = Calendar(cal_content)
+    #         offline = True
+    #     except FileNotFoundError:
+    #         print(f"Local ICS file not found: {local_ics_file_path}. Everything is fucked, the end.")
+    #         return
 
     # how many to show
     max_n = args[0] if args and 0 < args[0] <= 10 else 1
@@ -69,6 +107,20 @@ def get_f1_schedule(session_type, *args):
         start   = next((l for l in lines if l.startswith("DTSTART:")), "").split(":",1)[1]
         end     = next((l for l in lines if l.startswith("DTEND:")),   "").split(":",1)[1]
 
+        # # if requested session type isn't such or ALL, but still in summary, skip
+        # if session_type != "fp" or session_type != "all":
+        #     if "FP1" in summary or "FP2" in summary or "FP3" in summary:
+        #         continue
+        # if session_type != "q" and session_type != "all":
+        #     if "Qualify" in summary:
+        #         continue
+        # if session_type != "sp" and session_type != "all":
+        #     if "Sprint" in summary:
+        #         continue
+        # if session_type != "gp" and session_type != "all":
+        #     if "Grand Prix" in summary:
+        #         continue
+
         if "FP1" in summary or "FP2" in summary or "FP3" in summary:
             summary = emoji_fp + " " + summary
         elif "Qualify" in summary:
@@ -92,6 +144,9 @@ def get_f1_schedule(session_type, *args):
             val = f"<t:{int(dt_start.timestamp())}:R> at <t:{int(dt_start.timestamp())}:t>"
 
         embed.add_field(name=summary, value=val, inline=False)
+    
+    if offline:
+        embed.add_field(name="Calendar offline", value="-# Currently using local calendar last updated July 2025")
 
     return embed
 
@@ -155,7 +210,20 @@ class FormulaOne(Extension):
         # # --- MODIFICATION END ---
 
         url = "https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
-        cal = Calendar(requests.get(url).text)
+        try:
+            cal = Calendar(requests.get(url).text)
+        except:
+            # if no work, assume calendar is down
+            local_ics_file_path = "/home/timlau_cy/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
+
+            try:
+                with open(local_ics_file_path, 'r', encoding='utf-8') as f:
+                    cal_content = f.read()
+                cal = Calendar(cal_content)
+                offline = True
+            except FileNotFoundError:
+                print(f"Local ICS file not found: {local_ics_file_path}. Everything is fucked, the end.")
+                return
 
         # Iterate through events starting after 'now'
         for ev in cal.timeline.start_after(now):
