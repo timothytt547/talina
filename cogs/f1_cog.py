@@ -47,7 +47,8 @@ def get_f1_schedule(session_type, *args):
             cal = Calendar(requests.get(url).text)
             break
         except Exception as e:
-            print(_, e)
+            # print(_, e)
+            print(_)
             time.sleep(0.05)
 
     if not cal:

@@ -5,9 +5,8 @@ Discord Cog: Quotes Extension (Interactions.py v5+)
     /addquote keyword quote -> add a new quote (writes to CSV)
     /listkeywords       -> list available keywords
     /randomquote        -> get a random quote from whole DB
-    /qid id            -> view metadata for a specific quote by its #ID
-- Prefix command:
-    ... <keyword>   -> send a quote matching the keyword
+    /qid id             -> view quote metadata (author, date added)
+- Message trigger: if a message starts with '... <keyword>', the bot sends a matching quote.
 
 Usage:
     In your main bot file, load the extension:
@@ -16,14 +15,14 @@ Usage:
 Notes:
 - This version is built for the `interactions` library (interactions.py v5+).
 - The CSV is appended to when adding quotes; the in-memory index is updated.
-- The prefix listener requires the MESSAGE CONTENT intent to be enabled for your bot.
 """
 
 import csv
 import os
 import random
 import asyncio
-from datetime import datetime
+import re
+from datetime import datetime, timezone
 from typing import Dict, List
 
 import interactions
@@ -35,6 +34,7 @@ from interactions import (
     slash_option,
     OptionType,
     Embed,
+    Timestamp,
 )
 from interactions.ext.paginators import Paginator
 
@@ -67,17 +67,15 @@ class QuotesCog(Extension):
         self.keyword_index.clear()
         try:
             with open(self.csv_path, newline="", encoding="utf-8") as f:
+                # The first line of data is on line 2, after the header
                 reader = csv.DictReader(f)
-                for i, row in enumerate(reader):
-                    normalized = {
-                        k.strip(): (v or "").strip() for k, v in row.items()
-                    }
-                    # CSV line number is the list index + 2 (1 for 0-indexing, 1 for header)
-                    normalized["line_number"] = i + 2
+                for i, row in enumerate(reader, start=2):
+                    normalized = {k.strip(): (v or "").strip() for k, v in row.items()}
+                    normalized["line_number"] = i
                     self.quotes.append(normalized)
                     kw = normalized.get("keyword", "").lower()
                     if kw:
-                        self.keyword_index.setdefault(kw, []).append(i)
+                        self.keyword_index.setdefault(kw, []).append(i - 2)
         except Exception as e:
             print(f"[Quotes] Failed to load CSV '{self.csv_path}': {e}")
 
@@ -94,23 +92,68 @@ class QuotesCog(Extension):
                 "date_added": date_str,
             }
             try:
-                # Write to CSV file first
                 with open(self.csv_path, "a", newline="", encoding="utf-8") as f:
                     writer = csv.DictWriter(f, fieldnames=DEFAULT_HEADERS)
                     writer.writerow(row)
-                # Then update in-memory cache
+
+                # Update in-memory cache
                 index = len(self.quotes)
-                # The new line number is the current number of quotes + 2
-                row["line_number"] = index + 2
-                self.quotes.append(row)
+                new_quote_data = row.copy()
+                new_quote_data["line_number"] = index + 2
+                self.quotes.append(new_quote_data)
+
                 kw = row["keyword"].lower()
                 if kw:
                     self.keyword_index.setdefault(kw, []).append(index)
-                return row
+                return new_quote_data
             except Exception as e:
                 raise RuntimeError(f"Failed to append quote: {e}")
 
     # ---------- Helpers ----------
+    async def _process_emojis(self, text: str, guild: interactions.Guild | None) -> str:
+        """
+        Finds emoji strings (e.g., <:name:id>) or names (e.g., :name:) in text,
+        and replaces them with the current, valid emoji string from the server.
+        """
+        if not guild:
+            return text
+
+        try:
+            # Fetch the server's current emoji list
+            guild_emojis = await guild.fetch_all_custom_emojis()
+            if not guild_emojis:
+                # If no emojis, just strip the old emoji format to the name
+                return re.sub(r"<a?:(\w+):\d+>", r":\1:", text)
+
+            emoji_map = {emoji.name: emoji for emoji in guild_emojis}
+
+            def replacer(match):
+                # Check which group was captured to get the emoji name.
+                # group(1) is from <:name:id>, group(2) is from :name:
+                emoji_name = match.group(1) or match.group(2)
+                if not emoji_name:
+                    return match.group(0)  # Should not happen, but safe fallback
+
+                # Look up the emoji in the current server's list
+                emoji = emoji_map.get(emoji_name)
+                if emoji:
+                    # If found, return the new, correct emoji string
+                    animated_prefix = "a" if emoji.animated else ""
+                    return f"<{animated_prefix}:{emoji.name}:{emoji.id}>"
+                else:
+                    # If not found on the server, return the plain text name
+                    return f":{emoji_name}:"
+
+            # The regex finds either full emoji strings OR just emoji names
+            processed_text = re.sub(r"<a?:(\w+):\d+>|:(\w+):", replacer, text)
+            return processed_text
+
+        except Exception as e:
+            print(f"Could not process emojis for guild {guild.id}: {e}")
+            # On error, fallback to just showing the name
+            return re.sub(r"<a?:(\w+):\d+>", r":\1:", text)
+
+
     def _find_random_by_keyword(self, keyword: str):
         kw = (keyword or "").lower().strip()
         idxs = self.keyword_index.get(kw)
@@ -124,60 +167,19 @@ class QuotesCog(Extension):
         return random.choice(self.quotes)
 
     def _find_by_id(self, quote_id: int):
-        for quote in self.quotes:
-            if quote.get("line_number") == quote_id:
-                return quote
+        # Adjust for 0-based index and header row
+        target_index = quote_id - 2
+        if 0 <= target_index < len(self.quotes):
+            return self.quotes[target_index]
         return None
 
-    def _format_quote(self, row: Dict[str, str]) -> str:
+    async def _format_quote(self, row: Dict[str, str], guild: interactions.Guild | None) -> str:
+        line_number = row.get("line_number", "?")
         quote_text = row.get("quote", "")
-        line_num = row.get("line_number", "?")
-        return f"`#{line_num}` {quote_text}"
+        processed_text = await self._process_emojis(quote_text, guild)
+        return f"`#{line_number}` {processed_text}"
 
     # ---------- Commands ----------
-    @slash_command(name="randomquote", description="Get a random quote from the database")
-    async def randomquote(self, ctx: SlashContext):
-        picked = self._find_random_any()
-        if not picked:
-            await ctx.send("No quotes available yet.")
-            return
-        await ctx.send(self._format_quote(picked))
-
-    @slash_command(name="qid", description="View metadata for a specific quote by its ID")
-    @slash_option(
-        name="id",
-        description="The #ID of the quote you want to view",
-        opt_type=OptionType.INTEGER,
-        required=True,
-    )
-    async def qid(self, ctx: SlashContext, id: int):
-        picked = self._find_by_id(id)
-        if not picked:
-            await ctx.send(f"No quote found with ID `#{id}`.", ephemeral=True)
-            return
-
-        author = picked.get("Author", "Unknown")
-        keyword = picked.get("keyword", "N/A")
-        date_str = picked.get("date_added")
-
-        if date_str:
-            try:
-                dt_obj = datetime.fromisoformat(date_str)
-                timestamp = int(dt_obj.timestamp())
-                time_str = f"<t:{timestamp}:F>"
-            except (ValueError, TypeError):
-                time_str = date_str  # Fallback to plain string if parsing fails
-        else:
-            time_str = "Not available"
-
-        response = (
-            f"**Quote `#{id}` Info:**\n"
-            f"> **Author:** {author}\n"
-            f"> **Keyword:** `{keyword}`\n"
-            f"> **Added:** {time_str}"
-        )
-        await ctx.send(response, ephemeral=True)
-
     @slash_command(name="addquote", description="Add a new quote to the CSV store")
     @slash_option(
         name="keyword",
@@ -192,28 +194,29 @@ class QuotesCog(Extension):
         required=True,
     )
     async def addquote(self, ctx: SlashContext, keyword: str, quote: str):
-        if len(quote) > 2000:
+        if len(quote) > 1900:  # Adjusted for formatting
             await ctx.send(
                 "Quote is too long (Discord limit ~2000 characters).", ephemeral=True
             )
             return
 
         author_name = ctx.author.username
-
         try:
-            new_quote = await self.append_quote(
+            added_quote = await self.append_quote(
                 author=author_name, keyword=keyword, quote_text=quote
             )
-            line_num = new_quote.get("line_number", "?")
-            await ctx.send(
-                f"`#{line_num}` added by **{author_name}** :anger_right: `{keyword}`:\n{quote}"
-            )
+            line_num = added_quote.get("line_number", "?")
+            processed_quote_text = await self._process_emojis(quote, ctx.guild)
+            
+            output_string = f"#[{line_num}] added by {author_name} :anger_right: {keyword}:\n{processed_quote_text}"
+            # print(f"DEBUG: Sending addquote confirmation: {output_string}")
+            await ctx.send(output_string)
+
         except Exception as e:
             await ctx.send(f"Failed to save quote: {e}", ephemeral=True)
 
     @slash_command(
-        name="listkeywords",
-        description="List all available keywords in a paginated view",
+        name="listkeywords", description="List all available keywords (paginated)"
     )
     async def listkeywords(self, ctx: SlashContext):
         kws = sorted(self.keyword_index.keys())
@@ -221,61 +224,112 @@ class QuotesCog(Extension):
             await ctx.send("No keywords available yet.", ephemeral=True)
             return
 
-        pages = []
-        keywords_per_page = 50
-        chunks = [
-            kws[i : i + keywords_per_page] for i in range(0, len(kws), keywords_per_page)
+        items_per_page = 20
+        # Group keywords into pages
+        paged_keywords = [
+            kws[i : i + items_per_page] for i in range(0, len(kws), items_per_page)
         ]
 
-        if len(chunks) == 1:
-            description = ", ".join(f"`{kw}`" for kw in chunks[0])
-            await ctx.send(f"**Available Keywords:**\n{description}", ephemeral=True)
+        if len(paged_keywords) <= 1:
+            await ctx.send(f"Keywords: {', '.join(kws)}", ephemeral=True)
             return
 
-        for i, chunk in enumerate(chunks):
-            description = ", ".join(f"`{kw}`" for kw in chunk)
+        pages = []
+        for i, page_kws in enumerate(paged_keywords, 1):
             embed = Embed(
                 title="Available Keywords",
-                description=description,
-                color=0x5865F2,  # Discord Blurple
-                footer=f"Page {i + 1} of {len(chunks)}",
+                description="\n".join(page_kws),
+                color=0x7289DA,
+                footer=f"Page {i}/{len(paged_keywords)}",
             )
             pages.append(embed)
 
         paginator = Paginator(client=self.bot, pages=pages)
         await paginator.send(ctx, ephemeral=True)
 
-    # ---------- Message listener for prefix command ----------
+    @slash_command(name="randomquote", description="Get a random quote from the database")
+    async def randomquote(self, ctx: SlashContext):
+        picked = self._find_random_any()
+        if not picked:
+            await ctx.send("No quotes available yet.")
+            return
+        
+        keyword = picked.get("keyword", "unknown")
+        quote_part = await self._format_quote(picked, ctx.guild)
+        
+        output_string = f"... {keyword}\n{quote_part}"
+
+        # print(f"DEBUG: Sending randomquote: {output_string}")
+        await ctx.send(output_string)
+
+    @slash_command(name="qid", description="View a quote's metadata by its ID")
+    @slash_option(
+        name="id",
+        description="The line number of the quote to look up",
+        opt_type=OptionType.INTEGER,
+        required=True,
+    )
+    async def qid(self, ctx: SlashContext, id: int):
+        quote = self._find_by_id(id)
+        if not quote:
+            await ctx.send(f"Could not find a quote with ID #{id}.", ephemeral=True)
+            return
+
+        author = quote.get("Author", "Unknown")
+        keyword = quote.get("keyword", "None")
+        date_str = quote.get("date_added", None)
+
+        try:
+            dt_object = datetime.fromisoformat(date_str)
+            timestamp = Timestamp.fromdatetime(dt_object, tz=timezone.utc)
+            time_str = timestamp.format(time_format="F")
+        except (TypeError, ValueError):
+            time_str = "Invalid date format"
+
+        embed = Embed(
+            title=f"Metadata for Quote #{id}",
+            color=0x1ABC9C,
+        )
+        embed.add_field(name="Author", value=author, inline=True)
+        embed.add_field(name="Keyword", value=keyword, inline=True)
+        embed.add_field(name="Date Added", value=time_str, inline=False)
+
+        await ctx.send(embed=embed, ephemeral=True)
+
+    # ---------- Message listener ----------
     @listen()
-    async def on_prefix_quote(self, event: interactions.events.MessageCreate):
+    async def on_message_create(self, event: interactions.events.MessageCreate):
         message = event.message
+        # Ignore bots and DMs
+        if message.author.bot or not isinstance(
+            message.author, interactions.Member
+        ):
+            return
+
+        content = message.content or ""
         prefix = "... "
-
-        # Ignore messages from bots, in DMs, or that don't start with the prefix.
-        if not isinstance(message.author, interactions.Member) or message.author.bot:
-            return
-        if not message.content or not message.content.startswith(prefix):
+        if not content.lower().startswith(prefix):
             return
 
-        # Extract keyword from message
-        parts = message.content[len(prefix) :].split()
+        parts = content[len(prefix) :].split()
         if not parts:
-            return  # User only sent the prefix
+            return
 
         keyword = parts[0]
-
-        # Find and send the quote
         picked = self._find_random_by_keyword(keyword)
-        if picked:
-            try:
-                await message.channel.send(self._format_quote(picked))
-            except Exception as e:
-                print(
-                    f"[QuotesCog] Failed to send prefix quote in channel {message.channel.id}: {e}"
-                )
+        if not picked:
+            return
+
+        try:
+            output_string = await self._format_quote(picked, message.guild)
+            # print(f"DEBUG: Sending from listener: {output_string}")
+            await message.channel.send(output_string)
+        except Exception as e:
+            print(
+                f"Listener failed to send quote for keyword '{keyword}': {e}"
+            )
 
 
-# This setup function is how the extension is loaded
 def setup(bot: interactions.Client, **kwargs):
     QuotesCog(bot, **kwargs)
 
