@@ -2,10 +2,10 @@
 Discord Cog: Quotes Extension (Interactions.py v5+)
 - Reads quotes from a CSV (Author,keyword,quote,date_added)
 - Slash commands:
-    /addquote keyword quote -> add a new quote (writes to CSV)
-    /listkeywords       -> list available keywords
-    /randomquote        -> get a random quote from whole DB
-    /qid id             -> view quote metadata (author, date added)
+    /quote add keyword quote -> add a new quote (writes to CSV)
+    /quote list              -> list available keywords
+    /quote random            -> get a random quote from whole DB
+    /quote info id           -> view quote metadata (author, date added)
 - Message trigger: if a message starts with '... <keyword>', the bot sends a matching quote.
 
 Usage:
@@ -180,7 +180,12 @@ class QuotesCog(Extension):
         return f"`#{line_number}` {processed_text}"
 
     # ---------- Commands ----------
-    @slash_command(name="addquote", description="Add a new quote to the CSV store")
+    @slash_command(name="quote", description="Commands for managing and viewing quotes")
+    async def quote(self, ctx: SlashContext):
+        # This base command will never be called directly with subcommands.
+        pass
+
+    @quote.subcommand(sub_cmd_name="add", sub_cmd_description="Add a new quote to the CSV store")
     @slash_option(
         name="keyword",
         description="A single word to trigger the quote",
@@ -193,7 +198,7 @@ class QuotesCog(Extension):
         opt_type=OptionType.STRING,
         required=True,
     )
-    async def addquote(self, ctx: SlashContext, keyword: str, quote: str):
+    async def add(self, ctx: SlashContext, keyword: str, quote: str):
         if len(quote) > 1900:  # Adjusted for formatting
             await ctx.send(
                 "Quote is too long (Discord limit ~2000 characters).", ephemeral=True
@@ -208,17 +213,15 @@ class QuotesCog(Extension):
             line_num = added_quote.get("line_number", "?")
             processed_quote_text = await self._process_emojis(quote, ctx.guild)
             
-            output_string = f"#[{line_num}] added by {author_name} :anger_right: {keyword}:\n{processed_quote_text}"
+            output_string = f"`#{line_num}` added by {author_name} :anger_right: {keyword}:\n{processed_quote_text}"
             # print(f"DEBUG: Sending addquote confirmation: {output_string}")
             await ctx.send(output_string)
 
         except Exception as e:
             await ctx.send(f"Failed to save quote: {e}", ephemeral=True)
 
-    @slash_command(
-        name="listkeywords", description="List all available keywords (paginated)"
-    )
-    async def listkeywords(self, ctx: SlashContext):
+    @quote.subcommand(sub_cmd_name="list", sub_cmd_description="List all available keywords (paginated)")
+    async def list(self, ctx: SlashContext):
         kws = sorted(self.keyword_index.keys())
         if not kws:
             await ctx.send("No keywords available yet.", ephemeral=True)
@@ -247,8 +250,8 @@ class QuotesCog(Extension):
         paginator = Paginator(client=self.bot, pages=pages)
         await paginator.send(ctx, ephemeral=True)
 
-    @slash_command(name="randomquote", description="Get a random quote from the database")
-    async def randomquote(self, ctx: SlashContext):
+    @quote.subcommand(sub_cmd_name="random", sub_cmd_description="Get a random quote from the database")
+    async def random(self, ctx: SlashContext):
         picked = self._find_random_any()
         if not picked:
             await ctx.send("No quotes available yet.")
@@ -262,14 +265,14 @@ class QuotesCog(Extension):
         # print(f"DEBUG: Sending randomquote: {output_string}")
         await ctx.send(output_string)
 
-    @slash_command(name="qid", description="View a quote's metadata by its ID")
+    @quote.subcommand(sub_cmd_name="info", sub_cmd_description="View a quote's metadata by its ID")
     @slash_option(
         name="id",
         description="The line number of the quote to look up",
         opt_type=OptionType.INTEGER,
         required=True,
     )
-    async def qid(self, ctx: SlashContext, id: int):
+    async def info(self, ctx: SlashContext, id: int):
         quote = self._find_by_id(id)
         if not quote:
             await ctx.send(f"Could not find a quote with ID #{id}.", ephemeral=True)
@@ -277,14 +280,10 @@ class QuotesCog(Extension):
 
         author = quote.get("Author", "Unknown")
         keyword = quote.get("keyword", "None")
-        date_str = quote.get("date_added", None)
+        date_str = quote.get("date_added", "N/A")
 
-        try:
-            dt_object = datetime.fromisoformat(date_str)
-            timestamp = Timestamp.fromdatetime(dt_object, tz=timezone.utc)
-            time_str = timestamp.format(time_format="F")
-        except (TypeError, ValueError):
-            time_str = "Invalid date format"
+        # Extract just the date part from the string by splitting on space or T
+        display_date = date_str.split(" ")[0].split("T")[0]
 
         embed = Embed(
             title=f"Metadata for Quote #{id}",
@@ -292,7 +291,7 @@ class QuotesCog(Extension):
         )
         embed.add_field(name="Author", value=author, inline=True)
         embed.add_field(name="Keyword", value=keyword, inline=True)
-        embed.add_field(name="Date Added", value=time_str, inline=False)
+        embed.add_field(name="Date Added", value=display_date, inline=False)
 
         await ctx.send(embed=embed, ephemeral=True)
 
