@@ -3,11 +3,15 @@ A Discord bot written in Python, able to use Slash commands.
 
 Main functions include:
 - /f1
-  
    - schedule - for showing upcoming races.
    - upcoming_reminders - List pending F1 reminders
    - clear_reminders - Wipes all pending reminders
 - /fn (Poor man's Nitro)
+- /quote
+   - add keyword quote -> add a new quote (writes to CSV)
+   - list              -> list available keywords
+   - random            -> get a random quote from whole DB
+   - info id           -> view quote metadata (author, date added)
 - And some minor ones, you can view them in the code.
 
 As the functions are Slash commands, the usage should be self-explanatory.
