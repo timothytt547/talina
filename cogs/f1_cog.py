@@ -29,60 +29,56 @@ def get_f1_schedule(session_type, *args):
     emoji_gp    = ":race_car:"
     emoji_sp    = ":man_running_tone5:"
     now = datetime.now(timezone.utc)
-    offline = False
     cal = None
+    offline_message = None
 
-    # choose calendar URL
-    urls = {
-        "fp":  "https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3.ics",
-        "q":   "https://files-f1.motorsportcalendars.com/f1-calendar_qualifying.ics",
-        "gp":  "https://files-f1.motorsportcalendars.com/f1-calendar_gp.ics",
-        "sp":  "https://files-f1.motorsportcalendars.com/f1-calendar_sprint.ics",
-        "all": "https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
-    }
-    url = urls.get(session_type, urls["all"])
+    # --- Calendar Fetching Logic ---
+    url = "https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
+    local_ics_filename = url.split('/')[-1]
+    local_ics_file_path = f"/home/timlau_cy/{local_ics_filename}" 
+    cal_content = None
 
-    for _ in range(10):
+    # Try to fetch the live calendar up to 10 times
+    for attempt in range(10):
         try:
-            cal = Calendar(requests.get(url).text)
-            break
-        except Exception as e:
-            # print(_, e)
-            print(_)
-            time.sleep(0.05)
-
-    if not cal:
-        # if no work, assume calendar is down
-        local_ics_file_path = "/home/timlau_cy/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
-        # print(e)
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            cal_content = response.text
+            break # Success on fetch
+        except requests.exceptions.RequestException:
+            time.sleep(0.1) # Short delay before retrying
+    
+    if cal_content:
+        # We successfully fetched the content from the web
+        print(f"Successfully fetched live calendar in {attempt + 1} attempt(s).")
+        cal = Calendar(cal_content)
         try:
+            with open(local_ics_file_path, 'w', encoding='utf-8') as f:
+                f.write(cal_content)
+        except IOError as e:
+            print(f"Warning: Could not write to local ICS cache '{local_ics_file_path}': {e}")
+    else:
+        # All attempts to fetch from web failed, so fall back to local copy
+        print(f"Failed to fetch live calendar from '{url}' after 10 attempts. Attempting to use local cache.")
+        try:
+            last_updated_timestamp = int(os.path.getmtime(local_ics_file_path))
             with open(local_ics_file_path, 'r', encoding='utf-8') as f:
-                cal_content = f.read()
-            cal = Calendar(cal_content)
-            offline = True
+                local_cal_content = f.read()
+            cal = Calendar(local_cal_content)
+            offline_message = f"⚠️ **Calendar Offline**: Using local backup, last updated <t:{last_updated_timestamp}:R>."
         except FileNotFoundError:
-            print(f"Local ICS file not found: {local_ics_file_path}. Everything is fucked, the end.")
-            return
+            print(f"Error: Local ICS cache not found at '{local_ics_file_path}'. Cannot display schedule.")
+            error_msg = "The online calendar is currently down and a local backup could not be found."
+            return None, error_msg
+    
+    if not cal:
+        print("Error: Calendar object could not be created from either online or local source.")
+        error_msg = "Could not parse calendar data from the online or local source."
+        return None, error_msg
 
-    # try:
-    #     cal = Calendar(requests.get(url).text)
-    # except Exception as e:
-    #     # if no work, assume calendar is down
-    #     local_ics_file_path = "/home/timlau_cy/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
-    #     print(e)
-    #     try:
-    #         with open(local_ics_file_path, 'r', encoding='utf-8') as f:
-    #             cal_content = f.read()
-    #         cal = Calendar(cal_content)
-    #         offline = True
-    #     except FileNotFoundError:
-    #         print(f"Local ICS file not found: {local_ics_file_path}. Everything is fucked, the end.")
-    #         return
-
-    # how many to show
+    # --- Embed Building Logic ---
     max_n = args[0] if args and 0 < args[0] <= 10 else 1
 
-    # pretty name + emoji
     pretty_map = {
         "fp": ("Practice", emoji_fp),
         "q":  ("Qualifying", emoji_quali),
@@ -96,10 +92,32 @@ def get_f1_schedule(session_type, *args):
         title="Next "+ str(max_n) + " F1 " + pretty + "s " + emoji
     else:
         title="Next F1 " + pretty + " " + emoji
-    # title = f"Next F1 {pretty}" + ("" if max_n == 1 else f"s ({max_n})") + f" {emoji}"
     embed = interactions.Embed(title=title, color=interactions.Color.random())
 
     events = list(cal.timeline.now()) + list(cal.timeline.start_after(now))
+
+    # Filter events based on selected type
+    if session_type != "all":
+        filtered_events = []
+        for ev in events:
+            lines = ev.serialize().split("\n")
+            summary = next((l for l in lines if l.startswith("SUMMARY:F1:")), "").split(":", 2)[2]
+            lower_summary = summary.lower()
+            
+            should_add = False
+            if session_type == "fp" and any(s in lower_summary for s in ["fp1", "fp2", "fp3"]):
+                should_add = True
+            elif session_type == "q" and "qualifying" in lower_summary:
+                should_add = True
+            elif session_type == "sp" and "sprint" in lower_summary:
+                should_add = True
+            elif session_type == "gp" and "grand prix" in lower_summary and not any(s in lower_summary for s in ["fp1", "fp2", "fp3", "qualifying", "sprint"]):
+                should_add = True
+
+            if should_add:
+                filtered_events.append(ev)
+        events = filtered_events
+
     for idx, ev in enumerate(events):
         if idx >= max_n:
             break
@@ -107,20 +125,6 @@ def get_f1_schedule(session_type, *args):
         summary = next((l for l in lines if l.startswith("SUMMARY:F1:")), "").split(":",2)[2]
         start   = next((l for l in lines if l.startswith("DTSTART:")), "").split(":",1)[1]
         end     = next((l for l in lines if l.startswith("DTEND:")),   "").split(":",1)[1]
-
-        # # if requested session type isn't such or ALL, but still in summary, skip
-        # if session_type != "fp" or session_type != "all":
-        #     if "FP1" in summary or "FP2" in summary or "FP3" in summary:
-        #         continue
-        # if session_type != "q" and session_type != "all":
-        #     if "Qualify" in summary:
-        #         continue
-        # if session_type != "sp" and session_type != "all":
-        #     if "Sprint" in summary:
-        #         continue
-        # if session_type != "gp" and session_type != "all":
-        #     if "Grand Prix" in summary:
-        #         continue
 
         if "FP1" in summary or "FP2" in summary or "FP3" in summary:
             summary = emoji_fp + " " + summary
@@ -146,10 +150,7 @@ def get_f1_schedule(session_type, *args):
 
         embed.add_field(name=summary, value=val, inline=False)
     
-    if offline:
-        embed.add_field(name="Calendar offline", value="-# Currently using local calendar last updated July 2025")
-
-    return embed
+    return embed, offline_message
 
 
 # ---- THE COG ----
@@ -188,43 +189,49 @@ class FormulaOne(Extension):
 
     async def _schedule_new_reminders(self):
         now = datetime.now(timezone.utc)
-        # Define a timedelta for 3 days
         three_days_from_now = now + timedelta(days=3)
 
-
-        # # --- MODIFICATION START ---
-        # # Specify the path to your local ICS file for testing
-        # local_ics_file_path = "H:/Downloads/test.ics" # <--- IMPORTANT: Change this to your actual file path
-
-        # try:
-        #     with open(local_ics_file_path, 'r', encoding='utf-8') as f:
-        #         cal_content = f.read()
-        #     cal = Calendar(cal_content)
-        # except FileNotFoundError:
-        #     print(f"[F1 Reminder] Local ICS file not found: {local_ics_file_path}. Falling back to online calendar.")
-        #     url = "https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
-        #     cal = Calendar(requests.get(url).text)
-        # except Exception as e:
-        #     print(f"[F1 Reminder] Error loading local ICS file: {e}. Falling back to online calendar.")
-        #     url = "https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
-        #     cal = Calendar(requests.get(url).text)
-        # # --- MODIFICATION END ---
-
+        # --- MODIFICATION START: Cache ICS file locally with retries ---
         url = "https://files-f1.motorsportcalendars.com/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
-        try:
-            cal = Calendar(requests.get(url).text)
-        except:
-            # if no work, assume calendar is down
-            local_ics_file_path = "/home/timlau_cy/f1-calendar_p1_p2_p3_qualifying_sprint_gp.ics"
+        local_ics_filename = url.split('/')[-1]
+        local_ics_file_path = f"/home/timlau_cy/{local_ics_filename}"
+        cal = None
+        cal_content = None
 
+        # Try to fetch up to 10 times
+        for attempt in range(10):
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                cal_content = response.text
+                break # Success on fetch
+            except requests.exceptions.RequestException:
+                await asyncio.sleep(0.1) # Small async delay before retrying
+        
+        if cal_content:
+            # We successfully fetched the content from the web
+            print(f"Reminder loop: Successfully fetched live calendar in {attempt + 1} attempt(s).")
+            cal = Calendar(cal_content)
+            try:
+                with open(local_ics_file_path, 'w', encoding='utf-8') as f:
+                    f.write(cal_content)
+            except IOError as e:
+                print(f"Warning: Could not write to local ICS cache for reminders '{local_ics_file_path}': {e}")
+        else:
+            # All attempts failed, so fall back to local copy
+            print(f"Reminder loop: Failed to fetch live calendar after 10 attempts. Using local cache.")
             try:
                 with open(local_ics_file_path, 'r', encoding='utf-8') as f:
-                    cal_content = f.read()
-                cal = Calendar(cal_content)
-                offline = True
+                    local_cal_content = f.read()
+                cal = Calendar(local_cal_content)
             except FileNotFoundError:
-                print(f"Local ICS file not found: {local_ics_file_path}. Everything is fucked, the end.")
+                print(f"Reminder loop error: Local ICS cache not found at '{local_ics_file_path}'. Skipping.")
                 return
+        # --- MODIFICATION END ---
+
+        if not cal:
+            print("Reminder loop error: Calendar object could not be created. Skipping.")
+            return
 
         # Iterate through events starting after 'now'
         for ev in cal.timeline.start_after(now):
@@ -303,11 +310,26 @@ class FormulaOne(Extension):
             )
         ]
     )
-    async def f1_schedule(self, ctx: SlashContext, type: str = "", max: int = 0):
-        if max <= 0: max = 1
-        if not type:  type = "all"
-        embed = get_f1_schedule(type, max)
+    async def f1_schedule(self, ctx: SlashContext, type: str = "all", max: int = 1):
+        if max <= 0:
+            max = 1
+        
+        embed, message = get_f1_schedule(type, max)
+
+        # Handle hard failures where no embed can be generated
+        if embed is None:
+            if message:
+                await ctx.send(message, ephemeral=True)
+            else:
+                await ctx.send("An unknown error occurred while fetching the F1 schedule.", ephemeral=True)
+            return
+
+        # In the normal case, send the schedule embed publicly
         await ctx.send(embeds=embed)
+        
+        # If there's an accompanying message (like the offline warning), send it as an ephemeral followup
+        if message:
+            await ctx.send(message, ephemeral=True, delete_after=5)
 
     # — /f1 upcoming_reminders —
     @slash_command(
@@ -346,3 +368,4 @@ class FormulaOne(Extension):
         self.scheduled_events.clear()
         self._save_reminders()
         await ctx.send("✅ All F1 reminders cleared.")
+

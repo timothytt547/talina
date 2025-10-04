@@ -70,7 +70,8 @@ class QuotesCog(Extension):
                 # The first line of data is on line 2, after the header
                 reader = csv.DictReader(f)
                 for i, row in enumerate(reader, start=2):
-                    normalized = {k.strip(): (v or "").strip() for k, v in row.items()}
+                    # FIX: Added 'if k is not None' to handle rows with more columns than the header
+                    normalized = {k.strip(): (v or "").strip() for k, v in row.items() if k is not None}
                     normalized["line_number"] = i
                     self.quotes.append(normalized)
                     kw = normalized.get("keyword", "").lower()
@@ -331,4 +332,3 @@ class QuotesCog(Extension):
 
 def setup(bot: interactions.Client, **kwargs):
     QuotesCog(bot, **kwargs)
-
