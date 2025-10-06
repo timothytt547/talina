@@ -1,4 +1,4 @@
-discord_py_interactions==5.11.0
+discord-py-interactions==5.15.0
 ics==0.7.2
 python-dotenv==1.0.0
 python_dateutil==2.8.2
