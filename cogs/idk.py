@@ -4,6 +4,18 @@
 
 import interactions
 import re
+import random
+
+def get_mocking_level():
+    roll = random.random()
+    if roll < 0.005:
+        return "ultimate"
+    elif roll < 0.005 + 0.05:
+        return "message"
+    elif roll < 0.005 + 0.05 + 0.2:
+        return "reaction"
+    else:
+        return "hidden"
 
 class Idk(interactions.Extension):
     @interactions.listen()
@@ -11,12 +23,27 @@ class Idk(interactions.Extension):
         if event.message.author.bot:
             return
 
-        regex_pattern = r"\b(idk|dunno|beats\sme|no\sclue|no\sidea)\b|i(?:\s*(?:'m|am))?\s*(?:(?:do\s?n[o']t|not|am\snot)\s+(?:(?:really|even|quite)\s+)?(?:know|get|understand|see)|(?:have|got)\s+no\s+(?:idea|clue|inkling))|i(?:\s*(?:'m|am))?\s*(?:not|un)(?:sure|certain|clear)|i\s+lack\s+(?:the\s+)?(?:necessary\s+)?information|i(?:\s*(?:'m|am))\s+not\s+of\s+understandment"
+        regex_pattern = r"\b(idk|dunno|beats\sme|no\sclue|no\sidea)\b|i(?:\s*(?:'m|am))?\s*(?:(?:do\s?n[o']t|not|am\snot)\s+(?:(?:really|even|quite)\s+)?(?:know|get|understand|see)|(?:have(?:\s+got)?|got)\s+no\s+(?:idea|clue|inkling))|i(?:\s*(?:'m|am))?\s*(?:not|un)(?:sure|certain|clear)|i\s+lack\s+(?:(?:critical|important)|(?:the\s+)?(?:necessary\s+)?)information|i(?:\s*(?:'m|am))\s+not\s+of\s+understandment"
         if event.message.guild.id == 395243617956003842 and re.search(regex_pattern, event.message.content.lower()):
-            try:
+            mocking_level = get_mocking_level()
+            if mocking_level == "hidden":
+                #do nothing
+                return
+            elif mocking_level == "ultimate":
+                #send spam of messages and gifs
+                await event.message.reply("https://tenor.com/view/announcer-announcer-meme-awful-opinion-awful-take-bad-opinion-gif-925753956088699311")
+                await event.message.channel.send("Guys, look at this dude! " + event.message.author.mention + " doesn't know!")
+                await event.message.channel.send("https://tenor.com/view/laugh-at-this-user-ryan-gosling-ryan-gosling-cereal-embed-fail-meme-gif-22090542")
+                await event.message.channel.send("<:lookatthisdude:1323247099344715796>")
+                await event.message.channel.send("https://tenor.com/view/pepe-laugh-he-doesnt-know-pepe-gif-14019260")
+                await event.message.channel.send("https://tenor.com/view/sopranos-sopranos-paulie-laughing-the-sopranos-tony-soprano-gif-11977582283759302788")
+            elif mocking_level == "message":
+                #send message
+                await event.message.reply("He doesn't know! <:lookatthisdude:1323247099344715796>")
+            elif mocking_level == "reaction":
+                #send reaction
                 await event.message.add_reaction("<:lookatthisdude:1323247099344715796>")
-            except:
-                pass
+
 
 
 def setup(bot):
